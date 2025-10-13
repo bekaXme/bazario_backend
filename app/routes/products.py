@@ -1,17 +1,14 @@
-import os, shutil
+import os
+import shutil
 from datetime import datetime
 from typing import Optional
 from fastapi import APIRouter, Depends, Form, File, UploadFile, HTTPException
 from sqlmodel import Session, select
-
+from app.config import UPLOAD_DIR
 from app.db import get_session
 from app.models import Product, Store
 from app.auth import get_admin_user
-from dotenv import load_dotenv
-
-load_dotenv()
-UPLOAD_DIR = os.environ.get("UPLOAD_DIR", "./uploads")
-os.makedirs(UPLOAD_DIR, exist_ok=True)
+from app.utils import save_upload_uploadfile
 
 router = APIRouter(prefix="/products", tags=["products"])
 
@@ -30,11 +27,7 @@ def create_product(
         raise HTTPException(status_code=404, detail="Store not found")
     image_path = None
     if image:
-        fn = f"{int(datetime.utcnow().timestamp())}_{image.filename}"
-        dest = os.path.join(UPLOAD_DIR, fn)
-        with open(dest, "wb") as buffer:
-            shutil.copyfileobj(image.file, buffer)
-        image_path = dest
+        image_path = save_upload_uploadfile(image, UPLOAD_DIR)
     p = Product(title=title, price=price, description=description, store_id=store_id, image_path=image_path)
     session.add(p)
     session.commit()

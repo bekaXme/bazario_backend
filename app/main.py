@@ -1,26 +1,25 @@
-import os
 from fastapi import FastAPI
-from app.db import create_db_and_tables, Session, engine
+from sqlmodel import SQLModel, Session, select
+from app.db import get_session, engine
 from app.models import User
-from app.auth import get_password_hash
-from app.routes import users, stores, products
-
+from app.auth import UPLOAD_DIR, get_password_hash
+from app.routes import users, stores, products, orders, coins  # Added orders and coins
+import os
 
 app = FastAPI(title="Bazario Backend")
 
 app.include_router(users.router)
 app.include_router(stores.router)
 app.include_router(products.router)
+app.include_router(orders.router)
+app.include_router(coins.router)
 
 @app.on_event("startup")
-def on_startup():
-    create_db_and_tables()
-    os.makedirs("./uploads", exist_ok=True)
-    # Create admin if not exists
-    with Session(engine) as session:
-        admin = session.exec(
-            "SELECT * FROM user WHERE username='meadminBoss'"
-        ).first()
+async def on_startup():
+    SQLModel.metadata.create_all(engine)
+    os.makedirs(UPLOAD_DIR, exist_ok=True)
+    with next(get_session()) as session:
+        admin = session.exec(select(User).where(User.username == "meadminBoss")).first()
         if not admin:
             u = User(
                 username="meadminBoss",

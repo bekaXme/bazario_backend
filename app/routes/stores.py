@@ -1,16 +1,21 @@
+# app/routes/stores.py (Updated to handle latitude/longitude)
 from fastapi import APIRouter, Depends, HTTPException
 from sqlmodel import Session, select
-
 from app.db import get_session
 from app.models import Store, Product
-from schemas import StoreCreate
+from app.schemas import StoreCreate
 from app.auth import get_admin_user
 
 router = APIRouter(prefix="/stores", tags=["stores"])
 
 @router.post("/")
 def create_store(store_in: StoreCreate, session: Session = Depends(get_session), admin=Depends(get_admin_user)):
-    s = Store(**store_in.dict())
+    s = Store(
+        name=store_in.name,
+        description=store_in.description,
+        latitude=store_in.latitude,
+        longitude=store_in.longitude
+    )
     session.add(s)
     session.commit()
     session.refresh(s)
