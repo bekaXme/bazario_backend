@@ -3,7 +3,7 @@ from sqlmodel import SQLModel, Session, select
 from app.db import get_session, engine
 from app.models import User
 from app.auth import UPLOAD_DIR, get_password_hash
-from app.routes import users, stores, products, orders, coins  # Added orders and coins
+from app.routes import users, stores, products, orders, coins, cart  # Added orders and coins
 import os
 
 app = FastAPI(title="Bazario Backend")
@@ -13,6 +13,7 @@ app.include_router(stores.router)
 app.include_router(products.router)
 app.include_router(orders.router)
 app.include_router(coins.router)
+app.include_router(cart.router)
 
 @app.on_event("startup")
 async def on_startup():

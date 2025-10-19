@@ -56,3 +56,10 @@ class Order(SQLModel, table=True):
     status: str = "pending"  # pending, approved, rejected, delivered
     delivery_time: Optional[datetime] = None
     created_at: datetime = Field(default_factory=datetime.utcnow)
+    
+class CartItem(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    user_id: int
+    product_id: int
+    quantity: int = 1
+    added_at: datetime = Field(default_factory=datetime.utcnow)

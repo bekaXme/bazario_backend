@@ -60,3 +60,7 @@ class OrderOut(BaseModel):
 
 class OrderApprove(BaseModel):
     delivery_time: datetime
+    
+class CartItemCreate(BaseModel):
+    product_id: int
+    quantity: int = 1
