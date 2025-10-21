@@ -39,9 +39,20 @@ def request_coins(
     session.commit()
     return {"request_id": req.id, "status": "pending"}
 
-@router.get("/requests", response_model=List[CoinRequestOut])  # Corrected type hint
-def list_coin_requests(session: Session = Depends(get_session), admin=Depends(get_admin_user)):
-    return session.exec(select(CoinRequest)).all()
+@router.get("/requests", response_model=List[CoinRequestOut]) 
+def list_coin_requests(
+    session: Session = Depends(get_session), 
+    current_user=Depends(get_current_user)  # Get any logged-in user
+):
+    if current_user.is_admin:
+        # Admin sees all requests
+        query = select(CoinRequest)
+    else:
+        # Regular user sees only their own requests
+        query = select(CoinRequest).where(CoinRequest.user_id == current_user.id)
+    
+    return session.exec(query).all()
+
 
 @router.post("/requests/{req_id}/approve")
 def approve_coin_request(req_id: int, session: Session = Depends(get_session), admin=Depends(get_admin_user)):
