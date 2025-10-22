@@ -2,20 +2,22 @@ import os
 import shutil
 from datetime import datetime
 from app.db import UPLOAD_DIR
+from fastapi import Request, UploadFile
+from uuid import uuid4
 
-def save_upload_uploadfile(upload_file, dest_dir: str = None, prefix: str = "") -> str:
-    """Save an uploaded file to the uploads directory"""
-    from app.db import UPLOAD_DIR
-    dest_dir = dest_dir or UPLOAD_DIR
-    os.makedirs(dest_dir, exist_ok=True)
-    filename = f"{prefix}{int(datetime.utcnow().timestamp())}_{upload_file.filename}"
-    dest = os.path.join(dest_dir, filename)
-    with open(dest, "wb") as buffer:
-        import shutil
-        shutil.copyfileobj(upload_file.file, buffer)
-    return dest
 
-from fastapi import Request
+def save_upload_uploadfile(upload_file: UploadFile, upload_dir: str) -> str:
+    os.makedirs(upload_dir, exist_ok=True)
+    filename = f"{uuid4().int}_{datetime.now().strftime('%Y-%m-%d')}_{upload_file.filename}"
+    file_path = os.path.join(upload_dir, filename)
+
+    # Save the file
+    with open(file_path, "wb") as f:
+        f.write(upload_file.file.read())
+
+    # ✅ Return only the *relative* path (no "./")
+    return f"uploads/{filename}"
+
 
 def product_to_dict(product, request: Request):
     return {
