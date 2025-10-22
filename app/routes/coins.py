@@ -1,8 +1,7 @@
 from typing import List  # Changed from ast to typing
 from fastapi import APIRouter, Depends, Form, File, UploadFile, HTTPException
 from sqlmodel import Session, select
-from app.config import UPLOAD_DIR  # Assuming UPLOAD_DIR is defined here
-from app.db import get_session
+from app.db import get_session, UPLOAD_DIR
 from app.models import CoinRequest, User, Notification
 from app.schemas import CoinRequestCreate, CoinRequestOut
 from app.auth import get_current_user, get_admin_user
