@@ -1,14 +1,13 @@
 import os
+from fastapi import APIRouter, Depends, HTTPException, Form, File, UploadFile, Request
 from typing import Optional
-from fastapi import APIRouter, Depends, Form, File, UploadFile, HTTPException, Request
 from sqlmodel import Session, select
 from app.db import get_session, UPLOAD_DIR
 from app.models import Product, Store
 from app.auth import get_admin_user
-from app.utils import save_upload_uploadfile, product_to_dict
+from app.utils import save_upload_uploadfile
 
 router = APIRouter(prefix="/products", tags=["products"])
-
 
 @router.post("/")
 def create_product(
@@ -33,13 +32,13 @@ def create_product(
         price=price,
         description=description,
         store_id=store_id,
-        image_path=image_path
+        image_path=image_path,
     )
     session.add(p)
     session.commit()
     session.refresh(p)
 
-    return product_to_dict(p, request=None)  # Pass None if you don't need URL for this response
+    return {"id": p.id, "title": p.title}
 
 
 @router.get("/")
@@ -48,7 +47,25 @@ def list_products(request: Request, store_id: Optional[int] = None, session: Ses
     if store_id:
         q = q.where(Product.store_id == store_id)
     products = session.exec(q).all()
-    return [product_to_dict(p, request) for p in products]
+
+    # ✅ Fix image URLs here
+    base_url = str(request.base_url).rstrip("/")
+    result = []
+    for p in products:
+        image_url = None
+        if p.image_path:
+            filename = os.path.basename(p.image_path)
+            image_url = f"{base_url}/uploads/{filename}"
+        result.append({
+            "id": p.id,
+            "title": p.title,
+            "description": p.description,
+            "price": p.price,
+            "store_id": p.store_id,
+            "created_at": p.created_at,
+            "image_url": image_url,
+        })
+    return result
 
 
 @router.get("/{product_id}")
@@ -56,4 +73,19 @@ def get_product(product_id: int, request: Request, session: Session = Depends(ge
     p = session.get(Product, product_id)
     if not p:
         raise HTTPException(status_code=404, detail="Product not found")
-    return product_to_dict(p, request)
+
+    base_url = str(request.base_url).rstrip("/")
+    image_url = None
+    if p.image_path:
+        filename = os.path.basename(p.image_path)
+        image_url = f"{base_url}/uploads/{filename}"
+
+    return {
+        "id": p.id,
+        "title": p.title,
+        "description": p.description,
+        "price": p.price,
+        "store_id": p.store_id,
+        "created_at": p.created_at,
+        "image_url": image_url,
+    }
