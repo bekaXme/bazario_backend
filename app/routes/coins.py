@@ -95,6 +95,16 @@ def list_coin_requests(
 
     return output
 
+@router.get("/requests/{user_id}", response_model=List[CoinRequestOut])
+def get_user_coin_requests(
+    user_id: int,
+    session: Session = Depends(get_session),
+):
+    requests = session.exec(
+        select(CoinRequest).where(CoinRequest.user_id == user_id)
+    ).all()
+    return requests
+
 
 @router.post("/requests/{req_id}/approve")
 def approve_coin_request(
