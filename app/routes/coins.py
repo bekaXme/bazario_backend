@@ -11,54 +11,72 @@ from app.utils import save_upload_uploadfile
 router = APIRouter(prefix="/coins", tags=["coins"])
 
 
+
 @router.post("/request")
 def request_coins(
     request: Request,
     amount: int = Form(...),
     transaction_image: UploadFile = File(...),
     session: Session = Depends(get_session),
-    current_user=Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ):
-    """Handle new coin purchase requests with proof image."""
-    # Save uploaded image
-    image_filename = save_upload_uploadfile(transaction_image, UPLOAD_DIR, prefix="coin_transaction_")
+    try:
+        # Debug prints
+        token = request.headers.get("authorization", "No token found")
+        print(f"💡 Sending coin request with token: {token}")
+        print(f"💡 User ID: {current_user.id} | Username: {current_user.username}")
 
-    # Normalize path (prevent ./ or \\ issues)
-    image_path = image_filename.replace("\\", "/").replace("./", "")
-    if image_path.startswith("uploads/uploads/"):
-        image_path = image_path.replace("uploads/uploads/", "uploads/")
-    elif not image_path.startswith("uploads/"):
-        image_path = f"uploads/{image_path}"
+        # Check user validity
+        if not current_user or not current_user.id:
+            raise HTTPException(status_code=400, detail="Invalid user")
 
-    # Save request in DB
-    req = CoinRequest(
-        user_id=current_user.id,
-        amount=amount,
-        image_path=image_path,
-    )
-    session.add(req)
-    session.commit()
-    session.refresh(req)
+        # Save uploaded image safely
+        try:
+            image_filename = save_upload_uploadfile(transaction_image, UPLOAD_DIR)
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Failed to save upload: {e}")
 
-    # Notify all admins
-    admins = session.exec(select(User).where(User.is_admin == True)).all()
-    for admin in admins:
-        note = Notification(
-            user_id=admin.id,
-            title="New Coin Request",
-            message=f"User {current_user.username} requested {amount} coins. Request ID: {req.id}",
+        # Normalize image path
+        image_path = image_filename.replace("\\", "/")
+        if not image_path.startswith("uploads/"):
+            image_path = f"uploads/{image_path.split('uploads/')[-1]}"
+
+        # Save coin request in DB
+        req = CoinRequest(
+            user_id=current_user.id,
+            amount=amount,
+            image_path=image_path,
         )
-        session.add(note)
-    session.commit()
+        session.add(req)
+        session.commit()
+        session.refresh(req)
 
-    # ✅ Generate full URL
-    image_url = str(request.base_url) + image_path
+        # Notify all admins
+        admins = session.exec(select(User).where(User.is_admin == True)).all()
+        for admin in admins:
+            if not admin.id:
+                continue
+            note = Notification(
+                user_id=admin.id,
+                title="New Coin Request",
+                message=f"User {current_user.username} requested {amount} coins. Request ID: {req.id}",
+            )
+            session.add(note)
+        session.commit()
 
-    return {
-        "request_id": req.id,
-        "status": "pending",
-        "image_url": image_url,
-    }
+        # Return full image URL
+        image_url = str(request.base_url) + image_path
+
+        return {
+            "request_id": req.id,
+            "status": "pending",
+            "image_url": image_url,
+        }
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Internal server error: {e}")
 
 
 @router.get("/requests")
