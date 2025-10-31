@@ -89,3 +89,19 @@ def get_product(product_id: int, request: Request, session: Session = Depends(ge
         "created_at": p.created_at,
         "image_url": image_url,
     }
+
+
+@router.delete("/{product_id}")
+def delete_product(
+    product_id: int,
+    session: Session = Depends(get_session),
+    admin=Depends(get_admin_user),
+):
+    p = session.get(Product, product_id)
+    if not p:
+        raise HTTPException(status_code=404, detail="Product not found")
+
+    session.delete(p)
+    session.commit()
+
+    return {"status": "success", "message": "Product deleted"}

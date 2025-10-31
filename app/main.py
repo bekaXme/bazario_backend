@@ -3,7 +3,7 @@ from sqlmodel import SQLModel, Session, select
 from app.db import get_session, engine, UPLOAD_DIR
 from app.models import User
 from app.auth import get_password_hash
-from app.routes import users, stores, products, orders, coins, cart
+from app.routes import users, stores, products, orders, coins, cart, location
 import os
 from fastapi.staticfiles import StaticFiles
 
@@ -21,6 +21,7 @@ app.include_router(products.router)
 app.include_router(orders.router)
 app.include_router(coins.router)
 app.include_router(cart.router)
+app.include_router(location.router)
 
 @app.on_event("startup")
 async def on_startup():
