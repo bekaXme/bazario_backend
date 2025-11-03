@@ -49,6 +49,11 @@ class NotificationOut(BaseModel):
 
 class OrderCreate(BaseModel):
     products: List[Dict[str, int]]  # [{"product_id": 1, "quantity": 2}, ...]
+    name: str
+    phone_number: str
+    latitude: float
+    longitude: float
+    total_price: int
 
 class OrderOut(BaseModel):
     id: int

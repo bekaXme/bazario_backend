@@ -12,31 +12,42 @@ router = APIRouter(prefix="/orders", tags=["orders"])
 @router.post("/")
 def create_order(order_in: OrderCreate, session: Session = Depends(get_session), current_user=Depends(get_current_user)):
     total_coins = 0
+    total_price = 0
     for item in order_in.products:
         product = session.get(Product, item["product_id"])
         if not product:
             raise HTTPException(status_code=404, detail=f"Product {item['product_id']} not found")
         total_coins += product.price * item["quantity"]
+        total_price += product.price * item["quantity"]  # calculate total price
+    
     order = Order(
         user_id=current_user.id,
         products=order_in.products,
         total_coins=total_coins,
-        status="pending"
+        total_price=total_price,  # must not be None
+        status="pending",
+        name=order_in.name,
+        phone_number=order_in.phone_number,
+        latitude=order_in.latitude,
+        longitude=order_in.longitude
     )
+
     session.add(order)
     session.commit()
     session.refresh(order)
+
     # Notify admins
     admins = session.exec(select(User).where(User.is_admin == True)).all()
     for admin in admins:
         note = Notification(
             user_id=admin.id,
             title="New Order",
-            message=f"User {current_user.username} placed an order #{order.id} for {total_coins} coins."
+            message=f"User {current_user.username} placed an order #{order.id} for {total_price} total price."
         )
         session.add(note)
     session.commit()
-    return {"id": order.id, "status": "pending"}
+    return {"id": order.id, "status": "pending", "total_price": total_price}
+
 
 @router.get("/", response_model=List[OrderOut])
 def list_orders(session: Session = Depends(get_session), admin=Depends(get_admin_user)):

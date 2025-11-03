@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Optional, List
+from typing import Dict, Optional, List
 from sqlmodel import SQLModel, Field, JSON, Column
 
 class User(SQLModel, table=True):
@@ -56,11 +56,17 @@ class Notification(SQLModel, table=True):
 class Order(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     user_id: int
-    products: List[dict] = Field(default_factory=list, sa_column=Column(JSON))  # List of {"product_id": int, "quantity": int}
+    products: List[dict] = Field(default_factory=list, sa_column=Column(JSON))
     total_coins: int
-    status: str = "pending"  # pending, approved, rejected, delivered
+    total_price: Optional[int] = None  # make it optional
+    status: str = "pending"
     delivery_time: Optional[datetime] = None
+    name: Optional[str] = None
+    phone_number: Optional[str] = None
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
     created_at: datetime = Field(default_factory=datetime.utcnow)
+
     
 class CartItem(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
