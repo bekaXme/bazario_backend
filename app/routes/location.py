@@ -18,7 +18,8 @@ class LocationRequest(BaseModel):
 
 class DeliveryTimeRequest(BaseModel):
     user_id: str
-    delivery_time: str   # e.g. "35 minutes", "In 20 min", etc.
+    order_id: str
+    delivery_time: str  
 
 # 1️⃣ User sends location (from Yandex Map)
 @router.post("/send")
@@ -57,7 +58,7 @@ def set_delivery_time(data: DeliveryTimeRequest):
 
     DELIVERY_TIMES[data.user_id] = data.delivery_time
 
-    print(f"⏰ Admin set delivery time for {data.user_id}: {data.delivery_time}")
+    print(f"⏰ Admin set delivery time for {data.order_id}: {data.delivery_time}")
 
     return {
         "status": "success",
@@ -65,9 +66,9 @@ def set_delivery_time(data: DeliveryTimeRequest):
     }
 
 # 4️⃣ User checks delivery time
-@router.get("/delivery-time/{user_id}")
-def get_delivery_time(user_id: str):
-    delivery_time = DELIVERY_TIMES.get(user_id)
+@router.get("/delivery-time/{order_id}")
+def get_delivery_time(order_id: str):
+    delivery_time = DELIVERY_TIMES.get(order_id)
     if not delivery_time:
         raise HTTPException(status_code=404, detail="Delivery time not set yet")
 
