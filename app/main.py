@@ -4,6 +4,7 @@ from app.db import get_session, engine, UPLOAD_DIR
 from app.models import User
 from app.auth import get_password_hash
 from app.routes import users, stores, products, orders, coins, cart, location
+import app.services.notifications as notifications
 import os
 from fastapi.staticfiles import StaticFiles
 
@@ -22,6 +23,7 @@ app.include_router(orders.router)
 app.include_router(coins.router)
 app.include_router(cart.router)
 app.include_router(location.router)
+app.include_router(notifications.router)
 
 @app.on_event("startup")
 async def on_startup():
