@@ -1,6 +1,5 @@
 from typing import Dict, Optional, List
 from fastapi import FastAPI, Body, APIRouter
-import requests
 import json
 
 app = FastAPI()
