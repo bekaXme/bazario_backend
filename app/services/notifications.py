@@ -1,6 +1,7 @@
 from typing import Dict, Optional, List
 from fastapi import FastAPI, Body, APIRouter
 import json
+import http.client
 
 app = FastAPI()
 router = APIRouter(prefix="/notifications", tags=["Notifications"])
@@ -9,27 +10,24 @@ router = APIRouter(prefix="/notifications", tags=["Notifications"])
 # Firebase server key
 # -----------------------------
 FIREBASE_SERVER_KEY = "BHkmvG6hhHssmPsF54qUKKbcbbcpCZdqvg6LyzMMX_bkbrhd1YwG3nXZHXe8NQ-LVSwcUaqj0Q8fYhpjgCHdlTI"
+FCM_URL = "https://fcm.googleapis.com/fcm/send"
 
-# -----------------------------
+# -----------------------------``
 # In-memory storage
 # -----------------------------
 user_tokens: Dict[int, str] = {}   # FCM tokens
 admins = [1, 2]                    # Admin user IDs
 
 # Store all orders
-# order_id -> order info
 orders: Dict[int, Dict] = {}
-order_counter = 1  # Auto-increment order_id
+order_counter = 1  # Auto-increment order``_id
 
-
-# -----------------------------
-# Helper: send push notification
+# -----------------------------````````
+# Helper: send push notification (without requests)
 # -----------------------------
 def send_push_notification(token: str, title: str, body: str, data: Optional[Dict] = None):
-    headers = {
-        "Content-Type": "application/json",
-        "Authorization": f"key={FIREBASE_SERVER_KEY}"
-    }
+    conn = http.client.HTTPSConnection("fcm.googleapis.com")
+    
     payload = {
         "to": token,
         "notification": {
@@ -39,15 +37,20 @@ def send_push_notification(token: str, title: str, body: str, data: Optional[Dic
         },
         "priority": "high"
     }
+    
     if data:
         payload["data"] = data
 
-    response = requests.post(
-        "https://fcm.googleapis.com/fcm/send",
-        headers=headers,
-        data=json.dumps(payload)
-    )
-    return {"status_code": response.status_code, "response": response.text}
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"key={FIREBASE_SERVER_KEY}"
+    }
+
+    conn.request("POST", "/fcm/send", body=json.dumps(payload), headers=headers)
+    res = conn.getresponse()
+    response_text = res.read().decode()
+    
+    return {"status_code": res.status, "response": response_text}
 
 
 # -----------------------------
@@ -92,7 +95,7 @@ def order_finish(body: Dict = Body(...)):
         "location": location,
         "products": products,
         "total_price": total_price,
-        "status": "pending",  # pending / approved / denied
+        "status": "pending",
         "delivery_time": None
     }
 
@@ -117,7 +120,7 @@ def order_finish(body: Dict = Body(...)):
 def approve_order(body: Dict = Body(...)):
     order_id = body.get("order_id")
     delivery_time = body.get("delivery_time")
-    approve = body.get("approve", True)  # True = approved, False = denied
+    approve = body.get("approve", True)
 
     if order_id not in orders:
         return {"success": False, "message": "Order not found"}
@@ -126,7 +129,6 @@ def approve_order(body: Dict = Body(...)):
     orders[order_id]["delivery_time"] = delivery_time if approve else None
     user_id = orders[order_id]["user_id"]
 
-    # Send notification to user
     if approve:
         title = "🚚 Delivery Confirmed"
         body_text = f"Your order will be delivered in {delivery_time} minutes"
@@ -159,6 +161,31 @@ def user_orders(user_id: int):
     user_orders_list = [o for o in orders.values() if o["user_id"] == user_id]
     return {"success": True, "orders": user_orders_list}
 
+@router.post("/send_to_user")
+def send_to_user(body: Dict = Body(...)):
+    user_id = body.get("user_id")
+    title = body.get("title")
+    message = body.get("message")
+
+    if not all([user_id, title, message]):
+        return {"success": False, "message": "user_id, title, message are required"}
+
+    token = user_tokens.get(user_id)
+
+    if not token:
+        return {"success": False, "message": "Token for this user not found"}
+
+    result = send_push_notification(token, title, message)
+
+    return {
+        "success": True,
+        "message": "Notification sent",
+        "result": result
+    }
+
+
 
 # Register router
 app.include_router(router)
+
+
