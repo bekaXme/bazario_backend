@@ -28,8 +28,7 @@ def create_order(order_in: OrderCreate, session: Session = Depends(get_session),
         status="pending",
         name=order_in.name,
         phone_number=order_in.phone_number,
-        latitude=order_in.latitude,
-        longitude=order_in.longitude
+        address=order_in.address,
     )
 
     session.add(order)
@@ -100,3 +99,56 @@ def delete_order(order_id: int, session: Session = Depends(get_session), admin=D
     session.delete(order)
     session.commit()
     return {"ok": True}
+
+
+@router.post("/{order_id}/finish")
+def finish_order(
+    order_id: int,
+    session: Session = Depends(get_session),
+    current_user=Depends(get_current_user)
+):
+    order = session.get(Order, order_id)
+
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+
+    if order.user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Not your order")
+
+    if order.status != "approved":
+        raise HTTPException(status_code=400, detail="Order must be approved first")
+
+    user = session.get(User, current_user.id)
+
+    # CHECK COINS
+    if user.coins < order.total_price:
+        raise HTTPException(status_code=400, detail="Not enough coins")
+
+    # MINUS COINS
+    user.coins -= order.total_price
+
+    # SEND TO ADMIN
+    admin = session.exec(select(User).where(User.is_admin == True)).first()
+    if admin:
+        admin.coins += order.total_price
+        session.add(admin)
+
+    order.status = "finished"
+    session.add(user)
+    session.add(order)
+
+    # Notify user
+    note = Notification(
+        user_id=user.id,
+        title="Order Finished",
+        message=f"You paid {order.total_price} coins. New balance: {user.coins}"
+    )
+    session.add(note)
+
+    session.commit()
+
+    return {
+        "ok": True,
+        "message": "Order completed successfully",
+        "new_balance": user.coins
+    }
