@@ -52,7 +52,6 @@ class OrderCreate(BaseModel):
     name: str
     phone_number: str
     address: str
-    total_price: int
 
 class OrderOut(BaseModel):
     id: int
