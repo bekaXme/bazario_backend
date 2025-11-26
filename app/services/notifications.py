@@ -1,33 +1,37 @@
 from typing import Dict, Optional, List
 from fastapi import FastAPI, Body, APIRouter
+from sqlmodel import SQLModel, Field
+from pydantic import BaseModel
+from datetime import datetime
 import json
+import os
 import http.client
 
 app = FastAPI()
 router = APIRouter(prefix="/notifications", tags=["Notifications"])
 
-# -----------------------------
-# Firebase server key
-# -----------------------------
-FIREBASE_SERVER_KEY = "BHkmvG6hhHssmPsF54qUKKbcbbcpCZdqvg6LyzMMX_bkbrhd1YwG3nXZHXe8NQ-LVSwcUaqj0Q8fYhpjgCHdlTI"
+FIREBASE_SERVER_KEY = os.getenv("FIREBASE_SERVER_KEY")
 FCM_URL = "https://fcm.googleapis.com/fcm/send"
+FCM_HOST = "fcm.googleapis.com"
+FCM_PATH = "/fcm/send"
 
-# -----------------------------``
-# In-memory storage
-# -----------------------------
-user_tokens: Dict[int, str] = {}   # FCM tokens
-admins = [1, 2]                    # Admin user IDs
+# =====================================================
+# In-memory storage (replace with DB in production)
+# =====================================================
+user_tokens: Dict[int, str] = {}   # Maps user_id -> FCM token
+admins = [1, 2]
 
-# Store all orders
 orders: Dict[int, Dict] = {}
-order_counter = 1  # Auto-increment order``_id
+order_counter = 1
 
-# -----------------------------````````
-# Helper: send push notification (without requests)
-# -----------------------------
+
+# =====================================================
+# Helper: Send Push Notification
+# =====================================================
 def send_push_notification(token: str, title: str, body: str, data: Optional[Dict] = None):
-    conn = http.client.HTTPSConnection("fcm.googleapis.com")
-    
+
+    conn = http.client.HTTPSConnection(FCM_HOST)
+
     payload = {
         "to": token,
         "notification": {
@@ -35,132 +39,141 @@ def send_push_notification(token: str, title: str, body: str, data: Optional[Dic
             "body": body,
             "sound": "default"
         },
-        "priority": "high"
+        "priority": "high",
+        "data": data or {}
     }
-    
-    if data:
-        payload["data"] = data
 
     headers = {
         "Content-Type": "application/json",
         "Authorization": f"key={FIREBASE_SERVER_KEY}"
     }
 
-    conn.request("POST", "/fcm/send", body=json.dumps(payload), headers=headers)
+    conn.request("POST", FCM_PATH, body=json.dumps(payload), headers=headers)
     res = conn.getresponse()
     response_text = res.read().decode()
-    
-    return {"status_code": res.status, "response": response_text}
+
+    return {
+        "status_code": res.status,
+        "response": response_text
+    }
 
 
-# -----------------------------
-# Save token
-# -----------------------------
+# =====================================================
+# Save Token
+# =====================================================
 @router.post("/save_token")
 def save_token(body: Dict = Body(...)):
     user_id = body.get("user_id")
     token = body.get("token")
+
     if not user_id or not token:
-        return {"success": False, "message": "user_id and token are required"}
+        return {"success": False, "message": "user_id and token required"}
 
     user_tokens[user_id] = token
-    return {"success": True, "message": f"Token saved for user {user_id}"}
+    return {"success": True, "message": "Token saved"}
 
 
-# -----------------------------
-# User finishes order
-# -----------------------------
+# =====================================================
+# User Finishes Order
+# =====================================================
 @router.post("/order_finish")
 def order_finish(body: Dict = Body(...)):
     global order_counter
-    user_id = body.get("user_id")
-    name = body.get("name")
-    phone = body.get("phone")
-    location = body.get("location")
-    products = body.get("products")
-    total_price = body.get("total_price")
 
-    if not all([user_id, name, phone, location, products, total_price]):
-        return {"success": False, "message": "All fields are required"}
+    required_fields = ["user_id", "name", "phone", "location", "products", "total_price"]
+    for f in required_fields:
+        if f not in body:
+            return {"success": False, "message": f"{f} is required"}
 
     order_id = order_counter
     order_counter += 1
 
-    # Store the order
     orders[order_id] = {
         "order_id": order_id,
-        "user_id": user_id,
-        "name": name,
-        "phone": phone,
-        "location": location,
-        "products": products,
-        "total_price": total_price,
+        "user_id": body["user_id"],
+        "name": body["name"],
+        "phone": body["phone"],
+        "location": body["location"],
+        "products": body["products"],
+        "total_price": body["total_price"],
         "status": "pending",
         "delivery_time": None
     }
 
     # Notify admins
     title = "🛍️ New Order Received"
-    body_text = f"{name} placed an order totaling {total_price} UZS"
+    body_text = f"{body['name']} placed an order totaling {body['total_price']} UZS"
 
     results = []
     for admin_id in admins:
         token = user_tokens.get(admin_id)
         if token:
-            res = send_push_notification(token, title, body_text, data={"type": "order", "order_id": order_id, "user_id": user_id})
-            results.append({"admin_id": admin_id, "fcm_result": res})
+            res = send_push_notification(
+                token,
+                title,
+                body_text,
+                data={"type": "order", "order_id": order_id}
+            )
+            results.append({"admin_id": admin_id, "result": res})
 
-    return {"success": True, "message": "Order notification sent to admins", "results": results, "order_id": order_id}
+    return {"success": True, "order_id": order_id, "admin_notifications": results}
 
 
-# -----------------------------
-# Admin approves order
-# -----------------------------
+# =====================================================
+# Admin Approves or Denies Order
+# =====================================================
 @router.post("/approve_order")
 def approve_order(body: Dict = Body(...)):
     order_id = body.get("order_id")
-    delivery_time = body.get("delivery_time")
     approve = body.get("approve", True)
+    delivery_time = body.get("delivery_time", None)
 
     if order_id not in orders:
         return {"success": False, "message": "Order not found"}
 
-    orders[order_id]["status"] = "approved" if approve else "denied"
-    orders[order_id]["delivery_time"] = delivery_time if approve else None
-    user_id = orders[order_id]["user_id"]
+    order = orders[order_id]
+    user_id = order["user_id"]
 
     if approve:
+        order["status"] = "approved"
+        order["delivery_time"] = delivery_time
         title = "🚚 Delivery Confirmed"
-        body_text = f"Your order will be delivered in {delivery_time} minutes"
+        message = f"Your order will arrive in {delivery_time} minutes"
+        data = {"type": "approved", "order_id": order_id}
     else:
+        order["status"] = "denied"
+        order["delivery_time"] = None
         title = "❌ Order Denied"
-        body_text = f"Your order has been denied by the admin"
+        message = "Your order has been denied"
+        data = {"type": "denied", "order_id": order_id}
 
     token = user_tokens.get(user_id)
     result = None
     if token:
-        result = send_push_notification(token, title, body_text, data={"type": "delivery_time" if approve else "order_denied", "order_id": order_id})
+        result = send_push_notification(token, title, message, data=data)
 
-    return {"success": True, "message": "Order status updated", "fcm_result": result, "order": orders[order_id]}
+    return {"success": True, "order": order, "fcm_result": result}
 
 
-# -----------------------------
-# Admin: get all pending orders
-# -----------------------------
+# =====================================================
+# Admin: View All Pending Orders
+# =====================================================
 @router.get("/admin_orders")
 def admin_orders():
-    pending_orders = [o for o in orders.values() if o["status"] == "pending"]
-    return {"success": True, "pending_orders": pending_orders}
+    return {"success": True, "pending_orders": [o for o in orders.values() if o["status"] == "pending"]}
 
 
-# -----------------------------
-# User: get all orders
-# -----------------------------
+# =====================================================
+# User: View All Their Orders
+# =====================================================
 @router.get("/user_orders/{user_id}")
 def user_orders(user_id: int):
-    user_orders_list = [o for o in orders.values() if o["user_id"] == user_id]
-    return {"success": True, "orders": user_orders_list}
+    return {"success": True, "orders": [o for o in orders.values() if o["user_id"] == user_id]}
 
+
+# =====================================================
+# Send Notification to Any User
+# =====================================================
 @router.post("/send_to_user")
 def send_to_user(body: Dict = Body(...)):
     user_id = body.get("user_id")
@@ -168,24 +181,17 @@ def send_to_user(body: Dict = Body(...)):
     message = body.get("message")
 
     if not all([user_id, title, message]):
-        return {"success": False, "message": "user_id, title, message are required"}
+        return {"success": False, "message": "user_id, title, message required"}
 
     token = user_tokens.get(user_id)
-
     if not token:
-        return {"success": False, "message": "Token for this user not found"}
+        return {"success": False, "message": "FCM token not found"}
 
     result = send_push_notification(token, title, message)
-
-    return {
-        "success": True,
-        "message": "Notification sent",
-        "result": result
-    }
+    return {"success": True, "result": result}
 
 
-
-# Register router
 app.include_router(router)
+
 
 
