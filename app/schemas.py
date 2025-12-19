@@ -9,7 +9,14 @@ class UserCreate(BaseModel):
     phone_number: Optional[str] = None
     email: Optional[str] = None
     full_name: Optional[str] = None
-
+    language : int
+    
+class UserUpdate(BaseModel):
+    full_name: Optional[str] = None
+    email: Optional[str] = None
+    phone_number: Optional[str] = None
+    language: Optional[int] = None
+    
 class Token(BaseModel):
     access_token: str
     token_type: str
@@ -22,9 +29,16 @@ class StoreCreate(BaseModel):
     longitude: Optional[float] = None  # Added
 
 class ProductCreate(BaseModel):
-    title: str
+    title_in_uzb: str
+    description_in_uzb: str | None = None
+
+    title_in_rus: str | None = None
+    description_in_rus: str | None = None
+
+    title_in_eng: str | None = None
+    description_in_eng: str | None = None
+
     price: int
-    description: Optional[str] = None
     store_id: int
 
 class CoinRequestCreate(BaseModel):
@@ -61,9 +75,11 @@ class OrderOut(BaseModel):
     status: str
     delivery_time: Optional[datetime]
     created_at: datetime
+    
+class OrderDeliveryTime(BaseModel):
+    order_id: int
+    delivery_time: int  
 
-class OrderApprove(BaseModel):
-    delivery_time: datetime
     
 class CartItemCreate(BaseModel):
     product_id: int

@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlmodel import select, Session
 from app.db import get_session
 from app.models import User
-from app.schemas import UserCreate, Token
+from app.schemas import UserCreate, Token, UserUpdate
 from app.auth import (
     verify_password,
     get_password_hash,
@@ -13,6 +13,7 @@ from app.auth import (
 )
 from fastapi.security import OAuth2PasswordRequestForm
 from datetime import timedelta
+from fastapi import Body
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -26,12 +27,13 @@ def register(user_create: UserCreate, session: Session = Depends(get_session)):
         hashed_password=hashed,
         email=user_create.email,
         phone_number=user_create.phone_number,
-        full_name=user_create.full_name
+        full_name=user_create.full_name,
+        language=user_create.language
     )
     session.add(user)
     session.commit()
     session.refresh(user)
-    return {"id": user.id, "username": user.username}
+    return {"id": user.id, "username": user.username, "language": user.language}
 
 @router.post("/token", response_model=Token)
 def login(form_data: OAuth2PasswordRequestForm = Depends(), session: Session = Depends(get_session)):
@@ -50,7 +52,32 @@ def me(current_user: User = Depends(get_current_user)):
         "email": current_user.email,
         "coins": current_user.coins,
         "is_admin": current_user.is_admin,
+        "language" : current_user.language
     }
+    
+@router.patch("/me")
+def update_me(
+    user_update: UserUpdate,
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session)
+):
+    # Faqat kiritilgan maydonlarni yangilaymiz
+    for field, value in user_update.dict(exclude_unset=True).items():
+        setattr(current_user, field, value)
+    
+    session.add(current_user)
+    session.commit()
+    session.refresh(current_user)
+
+    return {
+        "id": current_user.id,
+        "username": current_user.username,
+        "full_name": current_user.full_name,
+        "email": current_user.email,
+        "phone_number": current_user.phone_number,
+        "language": current_user.language
+    }
+
 
 @router.get("/users")
 def list_users(session: Session = Depends(get_session), admin: User = Depends(get_admin_user)):

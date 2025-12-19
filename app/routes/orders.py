@@ -4,7 +4,7 @@ from sqlmodel import Session, select
 from datetime import datetime
 from app.db import get_session
 from app.models import Order, User, Product, Notification
-from app.schemas import OrderCreate, OrderOut, OrderApprove
+from app.schemas import OrderCreate, OrderDeliveryTime, OrderOut
 from app.auth import get_current_user, get_admin_user
 
 router = APIRouter(prefix="/orders", tags=["orders"])
@@ -74,72 +74,6 @@ def create_order(
 def list_orders(session: Session = Depends(get_session), admin=Depends(get_admin_user)):
     return session.exec(select(Order)).all()
 
-
-# -----------------------------
-# APPROVE ORDER
-# -----------------------------
-@router.post("/{order_id}/approve")
-def approve_order(
-    order_id: int,
-    approve_in: OrderApprove,
-    session: Session = Depends(get_session),
-    admin=Depends(get_admin_user)
-):
-    order = session.get(Order, order_id)
-
-    if not order:
-        raise HTTPException(status_code=404, detail="Order not found")
-
-    if order.status != "pending":
-        raise HTTPException(status_code=400, detail="Order already processed")
-
-    order.status = "approved"
-    order.delivery_time = approve_in.delivery_time
-
-    session.add(order)
-
-    # Notify user
-    note = Notification(
-        user_id=order.user_id,
-        title="Order Approved",
-        message=f"Your order #{order.id} is approved. Delivery time: {approve_in.delivery_time}",
-        created_at=datetime.utcnow(),
-    )
-    session.add(note)
-
-    session.commit()
-    return {"ok": True, "status": "approved"}
-
-
-# -----------------------------
-# REJECT ORDER
-# -----------------------------
-@router.post("/{order_id}/reject")
-def reject_order(order_id: int, session: Session = Depends(get_session), admin=Depends(get_admin_user)):
-    order = session.get(Order, order_id)
-
-    if not order:
-        raise HTTPException(status_code=404, detail="Order not found")
-
-    if order.status != "pending":
-        raise HTTPException(status_code=400, detail="Order already processed")
-
-    order.status = "rejected"
-    session.add(order)
-
-    # Notify user
-    note = Notification(
-        user_id=order.user_id,
-        title="Order Rejected",
-        message=f"Your order #{order.id} was rejected.",
-        created_at=datetime.utcnow(),
-    )
-    session.add(note)
-
-    session.commit()
-    return {"ok": True, "status": "rejected"}
-
-
 # -----------------------------
 # DELETE ORDER
 # -----------------------------
@@ -207,4 +141,41 @@ def finish_order(
     return {
         "ok": True,
         "new_balance": user.coins
+    }
+
+
+@router.get("/my_orders", response_model=List[OrderOut])
+def my_orders(
+    session: Session = Depends(get_session),
+    current_user=Depends(get_current_user)
+):
+    orders = session.exec(
+        select(Order).where(Order.user_id == current_user.id)
+    ).all()
+
+    return orders
+
+
+@router.post("/order_delivery_time")
+def order_delivery_time(
+    data: OrderDeliveryTime,
+    session: Session = Depends(get_session),
+    admin=Depends(get_admin_user)
+):
+    order = session.get(Order, data.order_id)
+
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+
+    order.delivery_time = data.delivery_time
+    order.status = f"{order.delivery_time}"
+
+    session.add(order)
+    session.commit()
+    session.refresh(order)
+
+    return {
+            "message": "Delivery time set successfully",
+            "order_id": order.id,
+            "delivery_time": order.delivery_time
     }

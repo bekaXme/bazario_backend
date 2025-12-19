@@ -10,7 +10,8 @@ class User(SQLModel, table=True):
     phone_number: Optional[str] = None
     hashed_password: str
     is_admin: bool = False
-    coins: int = 0
+    coins: int = 0    
+    language : int = 0  # 0 - Uzbek, 1 - Russian, 2 - English
     
 class LocationRequest(SQLModel):
     user_id: str
@@ -27,8 +28,12 @@ class Store(SQLModel, table=True):
 
 class Product(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
-    title: str
-    description: Optional[str] = None
+    title_in_uzb: str
+    description_in_uzb: Optional[str] = None
+    title_in_rus: str
+    description_in_rus: Optional[str] = None
+    title_in_eng: str
+    description_in_eng: Optional[str] = None
     price: int
     image_path: Optional[str] = None
     store_id: int = Field(foreign_key="store.id")
@@ -60,7 +65,7 @@ class Order(SQLModel, table=True):
     total_coins: int
     total_price: Optional[int] = None  # make it optional
     status: str = "pending"
-    delivery_time: Optional[datetime] = None
+    delivery_time: int | None = None  # in minutes
     name: Optional[str] = None
     phone_number: Optional[str] = None
     latitude: Optional[float] = None
