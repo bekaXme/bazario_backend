@@ -9,6 +9,47 @@ from app.utils import save_upload_uploadfile
 
 router = APIRouter(prefix="/products", tags=["products"])
 
+
+@router.get("/search")
+def search_products(
+    q: str,
+    request: Request,
+    session: Session = Depends(get_session),
+    user=Depends(get_current_user),
+):
+    statement = select(Product).where(
+        (Product.title_in_uzb.contains(q)) |
+        (Product.title_in_rus.contains(q)) |
+        (Product.title_in_eng.contains(q)) |
+        (
+            (Product.description_in_uzb.is_not(None) & Product.description_in_uzb.contains(q)) |
+            (Product.description_in_rus.is_not(None) & Product.description_in_rus.contains(q)) |
+            (Product.description_in_eng.is_not(None) & Product.description_in_eng.contains(q))
+        )
+    )
+
+    products = session.exec(statement).all()
+    base_url = str(request.base_url).rstrip("/")
+
+    result = []
+    for p in products:
+        title, description = product_by_language(p, user.language)
+
+        image_url = None
+        if p.image_path:
+            image_url = f"{base_url}/uploads/{os.path.basename(p.image_path)}"
+
+        result.append({
+            "id": p.id,
+            "title": title,
+            "description": description,
+            "price": p.price,
+            "store_id": p.store_id,
+            "image_url": image_url,
+        })
+
+    return result
+
 @router.post("/")
 def create_product(
     title_in_uzb: str = Form(...),
@@ -61,6 +102,8 @@ def create_product(
         "store_id": p.store_id,
         "image_path": p.image_path,
     }
+    
+
 
 
 def product_by_language(product, language):

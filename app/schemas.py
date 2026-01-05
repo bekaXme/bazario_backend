@@ -75,6 +75,9 @@ class OrderOut(BaseModel):
     status: str
     delivery_time: Optional[datetime]
     created_at: datetime
+    name : str
+    phone_number : str
+    address : str
     
 class OrderDeliveryTime(BaseModel):
     order_id: int
