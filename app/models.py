@@ -21,6 +21,7 @@ class LocationRequest(SQLModel):
 class Store(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     name: str
+    store_photo: Optional[str] =None
     address: Optional[str] = None
     latitude: Optional[float] = None  # Added latitude
     longitude: Optional[float] = None  # Added longitude

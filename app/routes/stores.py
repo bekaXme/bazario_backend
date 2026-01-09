@@ -12,6 +12,7 @@ router = APIRouter(prefix="/stores", tags=["stores"])
 def create_store(store_in: StoreCreate, session: Session = Depends(get_session), admin=Depends(get_admin_user)):
     s = Store(
         name=store_in.name,
+        store_photo=store_in.store_photo,
         description=store_in.description,
         latitude=store_in.latitude,
         longitude=store_in.longitude

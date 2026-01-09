@@ -24,6 +24,7 @@ class Token(BaseModel):
 
 class StoreCreate(BaseModel):
     name: str
+    store_photo: Optional[str] =None
     description: Optional[str] = None
     latitude: Optional[float] = None  # Added
     longitude: Optional[float] = None  # Added
